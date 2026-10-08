@@ -12,7 +12,7 @@ app = Flask(__name__)
 # ចាប់យកពាក្យបញ្ជា /start
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    # បង្កើតប៊ូតុងខាងក្រោម (Reply Keyboard)
+    # បង្កើតប៊ូតុងខាងក្រោម (Reply Keyboard) ជាភាសាអង់គ្លេសលំនាំដើម
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.row(KeyboardButton('🥷 Account'), KeyboardButton('🛍 Store'))
     markup.row(KeyboardButton('💸 Deposit'), KeyboardButton('💬 Admin'))
@@ -35,9 +35,24 @@ def send_welcome(message):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     if call.data == 'lang_kh':
-        bot.send_message(call.message.chat.id, 'អ្នកបានជ្រើសរើសភាសាខ្មែរ។')
+        # បង្កើតប៊ូតុងខាងក្រោមជាភាសាខ្មែរ
+        khmer_markup = ReplyKeyboardMarkup(resize_keyboard=True)
+        khmer_markup.row(KeyboardButton('🥷 គណនី'), KeyboardButton('🛍 ហាង'))
+        khmer_markup.row(KeyboardButton('💸 ដាក់ប្រាក់'), KeyboardButton('💬 Admin'))
+        khmer_markup.row(KeyboardButton('📚 របៀបប្រើប្រាស់'), KeyboardButton('🕒 ប្រវត្តិទិញ'))
+        
+        # ផ្ញើសារព្រមទាំងផ្លាស់ប្តូរប៊ូតុងទៅជាខ្មែរ
+        bot.send_message(call.message.chat.id, 'អ្នកបានជ្រើសរើសភាសាខ្មែរ។', reply_markup=khmer_markup)
+        
     elif call.data == 'lang_en':
-        bot.send_message(call.message.chat.id, 'You have selected English.')
+        # បង្កើតប៊ូតុងខាងក្រោមជាភាសាអង់គ្លេស
+        english_markup = ReplyKeyboardMarkup(resize_keyboard=True)
+        english_markup.row(KeyboardButton('🥷 Account'), KeyboardButton('🛍 Store'))
+        english_markup.row(KeyboardButton('💸 Deposit'), KeyboardButton('💬 Admin'))
+        english_markup.row(KeyboardButton('📚 How to use'), KeyboardButton('🕒 Purchase history'))
+        
+        # ផ្ញើសារព្រមទាំងផ្លាស់ប្តូរប៊ូតុងទៅជាអង់គ្លេសវិញ
+        bot.send_message(call.message.chat.id, 'You have selected English.', reply_markup=english_markup)
     
     # ជម្រះការជូនដំណឹង Loading លើប៊ូតុង
     bot.answer_callback_query(call.id)
