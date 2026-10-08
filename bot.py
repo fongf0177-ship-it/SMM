@@ -9,7 +9,7 @@ TOKEN = os.environ.get('TELEGRAM_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# ចាប់យកពាក្យបញ្ជា /start
+# ---------------- ផ្នែកចាប់ផ្តើម (/start) ----------------
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -47,6 +47,17 @@ def show_account_info(message):
     bot.send_message(message.chat.id, msg_text, parse_mode="Markdown")
 
 
+# ---------------- មុខងារហាង (Store) ----------------
+@bot.message_handler(func=lambda message: message.text in ['🛍 ហាង', '🛍 Store'])
+def show_store(message):
+    markup = InlineKeyboardMarkup()
+    markup.row(
+        InlineKeyboardButton('🎁 Facebook', callback_data='store_fb'),
+        InlineKeyboardButton('🎁 Tik Tok', callback_data='store_tt')
+    )
+    bot.send_message(message.chat.id, "🛒 សូមជ្រើសរើសសេវាកម្មខាងក្រោម / Please select a service below:", reply_markup=markup)
+
+
 # ---------------- មុខងារដាក់ប្រាក់ (Deposit Flow) ----------------
 @bot.message_handler(func=lambda message: message.text in ['💸 ដាក់ប្រាក់', '💸 Deposit'])
 def ask_deposit_amount(message):
@@ -72,6 +83,7 @@ def process_amount_step(message):
 def callback_query(call):
     chat_id = call.message.chat.id
     
+    # --- ផ្នែកភាសា ---
     if call.data == 'lang_kh':
         khmer_markup = ReplyKeyboardMarkup(resize_keyboard=True)
         khmer_markup.row(KeyboardButton('🥷 គណនី'), KeyboardButton('🛍 ហាង'))
@@ -86,6 +98,36 @@ def callback_query(call):
         english_markup.row(KeyboardButton('📚 How to use'), KeyboardButton('🕒 Purchase history'))
         bot.send_message(chat_id, 'You have selected English.', reply_markup=english_markup)
         
+    # --- ផ្នែកហាង (Store Menus) ---
+    elif call.data == 'store_main':
+        markup = InlineKeyboardMarkup()
+        markup.row(
+            InlineKeyboardButton('🎁 Facebook', callback_data='store_fb'),
+            InlineKeyboardButton('🎁 Tik Tok', callback_data='store_tt')
+        )
+        bot.edit_message_text("🛒 សូមជ្រើសរើសសេវាកម្មខាងក្រោម / Please select a service below:", chat_id, call.message.message_id, reply_markup=markup)
+
+    elif call.data == 'store_fb':
+        markup = InlineKeyboardMarkup()
+        markup.row(InlineKeyboardButton('👥 Followers', callback_data='service_fb_followers'))
+        markup.row(InlineKeyboardButton('🔙 ត្រឡប់ក្រោយ / Back', callback_data='store_main'))
+        bot.edit_message_text("📘 ជ្រើសរើសសេវាកម្ម Facebook / Select Facebook service:", chat_id, call.message.message_id, reply_markup=markup)
+        
+    elif call.data == 'store_tt':
+        markup = InlineKeyboardMarkup()
+        markup.row(
+            InlineKeyboardButton('❤️ Like', callback_data='service_tt_like'),
+            InlineKeyboardButton('👁 Views', callback_data='service_tt_views')
+        )
+        markup.row(InlineKeyboardButton('🔙 ត្រឡប់ក្រោយ / Back', callback_data='store_main'))
+        bot.edit_message_text("🎵 ជ្រើសរើសសេវាកម្ម Tik Tok / Select Tik Tok service:", chat_id, call.message.message_id, reply_markup=markup)
+        
+    elif call.data.startswith('service_'):
+        # ពេលគេចុចលើសេវាកម្មណាមួយ (Followers, Like, Views) វានឹងលោតសារនេះសិន
+        bot.answer_callback_query(call.id, "✅ សេវាកម្មនេះកំពុងរៀបចំ! / Service is being prepared!", show_alert=True)
+        return # បញ្ឈប់កុំឲ្យរត់ទៅ bot.answer_callback_query(call.id) នៅខាងក្រោមទៀត
+
+    # --- ផ្នែកដាក់ប្រាក់ ---
     elif call.data == 'cancel_deposit':
         bot.edit_message_caption(chat_id=chat_id, message_id=call.message.message_id, caption="❌ ប្រតិបត្តិការដាក់ប្រាក់ត្រូវបានបោះបង់!\nDeposit transaction cancelled!")
         
@@ -94,6 +136,7 @@ def callback_query(call):
         msg = bot.send_message(chat_id, "សូមផ្ញើរូបភាពវិក្កយបត្រ (Screenshot) នៃការផ្ទេរប្រាក់របស់អ្នកមកកាន់ទីនេះ ខាងយើងខ្ញុំនឹងធ្វើការពិនិត្យ៖\n\nPlease send your payment screenshot here:")
         bot.register_next_step_handler(msg, process_receipt_step)
         
+    # ជម្រះការជូនដំណឹង Loading លើប៊ូតុងធម្មតា
     bot.answer_callback_query(call.id)
 
 def process_receipt_step(message):
