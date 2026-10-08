@@ -9,6 +9,9 @@ TOKEN = os.environ.get('TELEGRAM_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
+# ទិន្នន័យបណ្តោះអាសន្នសម្រាប់ផ្ទុកការបញ្ជាទិញរបស់អ្នកប្រើប្រាស់
+user_orders = {}
+
 # ---------------- ផ្នែកចាប់ផ្តើម (/start) ----------------
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -26,7 +29,6 @@ def send_welcome(message):
     )
 
     bot.send_message(message.chat.id, "សូមជ្រើសរើសភាសា / Please choose your language:", reply_markup=inline_markup)
-
 
 # ---------------- មុខងារគណនី (Account Info) ----------------
 @bot.message_handler(func=lambda message: message.text in ['🥷 គណនី', '🥷 Account'])
@@ -46,7 +48,6 @@ def show_account_info(message):
     )
     bot.send_message(message.chat.id, msg_text, parse_mode="Markdown")
 
-
 # ---------------- មុខងារហាង (Store) ----------------
 @bot.message_handler(func=lambda message: message.text in ['🛍 ហាង', '🛍 Store'])
 def show_store(message):
@@ -56,7 +57,6 @@ def show_store(message):
         InlineKeyboardButton('🎁 Tik Tok', callback_data='store_tt')
     )
     bot.send_message(message.chat.id, "🛒 សូមជ្រើសរើសសេវាកម្មខាងក្រោម / Please select a service below:", reply_markup=markup)
-
 
 # ---------------- មុខងារដាក់ប្រាក់ (Deposit Flow) ----------------
 @bot.message_handler(func=lambda message: message.text in ['💸 ដាក់ប្រាក់', '💸 Deposit'])
@@ -77,6 +77,39 @@ def process_amount_step(message):
     caption = f"ចំនួនទឹកប្រាក់ដែលត្រូវបង់ / Amount to pay: **{amount}**\n\nសូមស្កេន QR Code ខាងក្រោមដើម្បីធ្វើការទូទាត់ប្រាក់។\nPlease scan the QR code below to make a payment."
     bot.send_photo(message.chat.id, photo=qr_url, caption=caption, parse_mode="Markdown", reply_markup=markup)
 
+# ---------------- មុខងារបញ្ជាទិញសេវាកម្ម (Order Flow) ----------------
+def process_url_step(message):
+    chat_id = message.chat.id
+    if chat_id not in user_orders:
+        return
+        
+    user_orders[chat_id]['url'] = message.text
+    msg = bot.send_message(chat_id, "🔢 សូមបញ្ចូលចំនួនដែលអ្នកចង់បាន (ឧទាហរណ៍: 1000):\n\nPlease enter the quantity:")
+    bot.register_next_step_handler(msg, process_quantity_step)
+
+def process_quantity_step(message):
+    chat_id = message.chat.id
+    if chat_id not in user_orders:
+        return
+        
+    user_orders[chat_id]['quantity'] = message.text
+    order = user_orders[chat_id]
+    
+    summary = (
+        f"🛒 **ពិនិត្យការបញ្ជាទិញរបស់អ្នក / Order Summary:**\n\n"
+        f"🔹 **សេវាកម្ម (Service):** {order['service']}\n"
+        f"🔗 **លីង (URL):** {order['url']}\n"
+        f"🔢 **ចំនួន (Quantity):** {order['quantity']}\n\n"
+        "តើអ្នកចង់បន្តការទិញនេះទេ?"
+    )
+    
+    markup = InlineKeyboardMarkup()
+    markup.row(
+        InlineKeyboardButton('❌ បោះបង់', callback_data='cancel_order'),
+        InlineKeyboardButton('✅ បញ្ជាក់ទិញ', callback_data='confirm_order')
+    )
+    # disable_web_page_preview=True ដើម្បីកុំឲ្យលោតរូបភាព Link រញ៉េរញ៉ៃក្នុងសារ
+    bot.send_message(chat_id, summary, parse_mode="Markdown", reply_markup=markup, disable_web_page_preview=True)
 
 # ---------------- ចាប់យកការចុចប៊ូតុងជាប់សារ (Callback Query) ----------------
 @bot.callback_query_handler(func=lambda call: True)
@@ -122,10 +155,30 @@ def callback_query(call):
         markup.row(InlineKeyboardButton('🔙 ត្រឡប់ក្រោយ / Back', callback_data='store_main'))
         bot.edit_message_text("🎵 ជ្រើសរើសសេវាកម្ម Tik Tok / Select Tik Tok service:", chat_id, call.message.message_id, reply_markup=markup)
         
+    # --- ពេលចុចលើសេវាកម្មណាមួយ ដើម្បីចាប់ផ្តើមទិញ ---
     elif call.data.startswith('service_'):
-        # ពេលគេចុចលើសេវាកម្មណាមួយ (Followers, Like, Views) វានឹងលោតសារនេះសិន
-        bot.answer_callback_query(call.id, "✅ សេវាកម្មនេះកំពុងរៀបចំ! / Service is being prepared!", show_alert=True)
-        return # បញ្ឈប់កុំឲ្យរត់ទៅ bot.answer_callback_query(call.id) នៅខាងក្រោមទៀត
+        service_name = ""
+        if call.data == 'service_fb_followers': service_name = "Facebook Followers"
+        elif call.data == 'service_tt_like': service_name = "Tik Tok Like"
+        elif call.data == 'service_tt_views': service_name = "Tik Tok Views"
+        
+        # រក្សាទុកឈ្មោះសេវាកម្មចូលក្នុង user_orders
+        user_orders[chat_id] = {'service': service_name}
+        
+        msg = bot.send_message(chat_id, f"🔗 សូមបញ្ចូលលីង (URL) សម្រាប់សេវាកម្ម **{service_name}**:\n\nPlease enter the URL:", parse_mode="Markdown")
+        bot.register_next_step_handler(msg, process_url_step)
+
+    # --- ផ្នែកបញ្ជាក់ការទិញសេវាកម្ម ---
+    elif call.data == 'cancel_order':
+        bot.edit_message_text("❌ ការបញ្ជាទិញត្រូវបានបោះបង់!\nOrder cancelled!", chat_id, call.message.message_id)
+        if chat_id in user_orders:
+            del user_orders[chat_id] # លុបទិន្នន័យចោល
+            
+    elif call.data == 'confirm_order':
+        bot.edit_message_text("✅ ការបញ្ជាទិញទទួលបានជោគជ័យ! ប្រព័ន្ធកំពុងដំណើរការ។\nOrder confirmed successfully!", chat_id, call.message.message_id)
+        if chat_id in user_orders:
+            # ទីនេះអ្នកអាចសរសេរកូដកាត់លុយ ឬបញ្ជូនទិន្នន័យទៅ Admin
+            del user_orders[chat_id] # លុបទិន្នន័យចោលក្រោយពេលបញ្ជាក់រួច
 
     # --- ផ្នែកដាក់ប្រាក់ ---
     elif call.data == 'cancel_deposit':
@@ -136,7 +189,7 @@ def callback_query(call):
         msg = bot.send_message(chat_id, "សូមផ្ញើរូបភាពវិក្កយបត្រ (Screenshot) នៃការផ្ទេរប្រាក់របស់អ្នកមកកាន់ទីនេះ ខាងយើងខ្ញុំនឹងធ្វើការពិនិត្យ៖\n\nPlease send your payment screenshot here:")
         bot.register_next_step_handler(msg, process_receipt_step)
         
-    # ជម្រះការជូនដំណឹង Loading លើប៊ូតុងធម្មតា
+    # ជម្រះការជូនដំណឹង Loading លើប៊ូតុង
     bot.answer_callback_query(call.id)
 
 def process_receipt_step(message):
