@@ -14,7 +14,7 @@ app = Flask(__name__)
 user_orders = {}
 user_balances = {}    
 pending_deposits = {} 
-user_purchase_history = {} # ផ្ទុកប្រវត្តិទិញរបស់អ្នកប្រើប្រាស់
+user_purchase_history = {}
 
 # ---------------- ផ្នែកចាប់ផ្តើម (/start) ----------------
 @bot.message_handler(commands=['start'])
@@ -71,6 +71,17 @@ def show_admin_contact(message):
     )
     bot.send_message(message.chat.id, admin_text, parse_mode="Markdown")
 
+# ---------------- មុខងាររបៀបប្រើប្រាស់ (How to use) ----------------
+@bot.message_handler(func=lambda message: message.text in ['📚 របៀបប្រើប្រាស់', '📚 How to use'])
+def show_how_to_use(message):
+    tutorial_text = (
+        "📚 **របៀបប្រើប្រាស់ (How to use):**\n\n"
+        "សូមចូលទៅកាន់តំណភ្ជាប់ខាងក្រោមដើម្បីមើលការណែនាំពីរបៀបប្រើប្រាស់ Bot នេះ៖\n"
+        "👉 https://t.me/MT5SMM/4"
+    )
+    # បិទ disable_web_page_preview ក្រែងលោចង់ឲ្យលោតរូបភាពរបស់ Link
+    bot.send_message(message.chat.id, tutorial_text, parse_mode="Markdown")
+
 # ---------------- មុខងារប្រវត្តិទិញ (Purchase History) ----------------
 @bot.message_handler(func=lambda message: message.text in ['🕒 ប្រវត្តិទិញ', '🕒 Purchase history'])
 def show_purchase_history(message):
@@ -82,8 +93,6 @@ def show_purchase_history(message):
         return
         
     history_text = "🕒 **ប្រវត្តិទិញចុងក្រោយរបស់អ្នក / Your Recent Purchases:**\n\n"
-    
-    # បង្ហាញប្រវត្តិថ្មីៗបំផុតមុន (យកតែ 10 ប្រតិបត្តិការចុងក្រោយ)
     for item in reversed(history[-10:]):
         history_text += (
             f"🆔 **ID:** `{item['order_id']}`\n"
@@ -92,7 +101,6 @@ def show_purchase_history(message):
             f"⏰ **ពេលវេលា:** {item['time']}\n"
             "-----------------------\n"
         )
-        
     bot.send_message(chat_id, history_text, parse_mode="Markdown")
 
 # ---------------- មុខងារដាក់ប្រាក់ (Deposit Flow) ----------------
@@ -104,8 +112,7 @@ def ask_deposit_amount(message):
 def process_amount_step(message):
     try:
         amount = float(message.text)
-        if amount <= 0:
-            raise ValueError
+        if amount <= 0: raise ValueError
     except ValueError:
         msg = bot.send_message(message.chat.id, "❌ សូមបញ្ចូលចំនួនប្រាក់ជាលេខឲ្យបានត្រឹមត្រូវ! សាកល្បងម្តងទៀត៖")
         bot.register_next_step_handler(msg, process_amount_step)
@@ -126,17 +133,14 @@ def process_amount_step(message):
 # ---------------- មុខងារបញ្ជាទិញសេវាកម្ម (Order Flow) ----------------
 def process_url_step(message):
     chat_id = message.chat.id
-    if chat_id not in user_orders:
-        return
-        
+    if chat_id not in user_orders: return
     user_orders[chat_id]['url'] = message.text
     msg = bot.send_message(chat_id, "🔢 សូមបញ្ចូលចំនួនដែលអ្នកចង់បាន (ឧទាហរណ៍: 1000):\n\nPlease enter the quantity:")
     bot.register_next_step_handler(msg, process_quantity_step)
 
 def process_quantity_step(message):
     chat_id = message.chat.id
-    if chat_id not in user_orders:
-        return
+    if chat_id not in user_orders: return
         
     quantity = message.text
     if not quantity.isdigit() or int(quantity) <= 0:
@@ -146,7 +150,6 @@ def process_quantity_step(message):
 
     user_orders[chat_id]['quantity'] = int(quantity)
     order = user_orders[chat_id]
-    
     total_price = (order['quantity'] / 1000) * order['price_per_1k']
     order['total_price'] = total_price
     
@@ -185,7 +188,6 @@ def process_quantity_step(message):
 def callback_query(call):
     chat_id = call.message.chat.id
     
-    # --- ផ្នែកភាសា ---
     if call.data == 'lang_kh':
         khmer_markup = ReplyKeyboardMarkup(resize_keyboard=True)
         khmer_markup.row(KeyboardButton('🥷 គណនី'), KeyboardButton('🛍 ហាង'))
@@ -200,7 +202,6 @@ def callback_query(call):
         english_markup.row(KeyboardButton('📚 How to use'), KeyboardButton('🕒 Purchase history'))
         bot.send_message(chat_id, 'You have selected English.', reply_markup=english_markup)
         
-    # --- ផ្នែកហាង (Store Menus) ---
     elif call.data == 'store_main':
         markup = InlineKeyboardMarkup()
         markup.row(InlineKeyboardButton('🎁 Facebook', callback_data='store_fb'), InlineKeyboardButton('🎁 Tik Tok', callback_data='store_tt'))
@@ -226,7 +227,6 @@ def callback_query(call):
         markup.row(InlineKeyboardButton('🔙 ត្រឡប់ក្រោយ / Back', callback_data='store_main'))
         bot.edit_message_text("🎵 ជ្រើសរើសសេវាកម្ម Tik Tok / Select Tik Tok service:", chat_id, call.message.message_id, reply_markup=markup)
         
-    # --- ចាប់ផ្តើមទិញ ---
     elif call.data.startswith('service_'):
         if call.data == 'service_fbf_10': service_name, price_per_1k = "Facebook Followers (ធានា 10ថ្ងៃ)", 0.80
         elif call.data == 'service_fbf_5': service_name, price_per_1k = "Facebook Followers (ធានា 5ថ្ងៃ)", 0.65
@@ -238,7 +238,6 @@ def callback_query(call):
         msg = bot.send_message(chat_id, f"🔗 សូមបញ្ចូលលីង (URL) សម្រាប់សេវាកម្ម **{service_name}**:\n\nPlease enter the URL:", parse_mode="Markdown")
         bot.register_next_step_handler(msg, process_url_step)
 
-    # --- បញ្ជាក់ការទិញសេវាកម្ម (កាត់លុយ និងរក្សាទុកប្រវត្តិ) ---
     elif call.data == 'cancel_order':
         bot.edit_message_text("❌ ការបញ្ជាទិញត្រូវបានបោះបង់!\nOrder cancelled!", chat_id, call.message.message_id)
         if chat_id in user_orders: del user_orders[chat_id] 
@@ -250,18 +249,14 @@ def callback_query(call):
             current_balance = user_balances.get(chat_id, 0.0)
             
             if current_balance >= total_price:
-                # 1. កាត់លុយ
                 user_balances[chat_id] -= total_price
                 new_balance = user_balances[chat_id]
                 
-                # 2. បង្កើត ID សេវាកម្ម និងកត់ត្រាពេលម៉ោង
                 order_id = f"OD{random.randint(100000, 999999)}"
                 current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                # 3. រក្សាទុកក្នុងប្រវត្តិ
                 if chat_id not in user_purchase_history:
                     user_purchase_history[chat_id] = []
-                    
                 user_purchase_history[chat_id].append({
                     'order_id': order_id,
                     'service': order['service'],
@@ -280,10 +275,8 @@ def callback_query(call):
                 bot.edit_message_text(success_msg, chat_id, call.message.message_id, parse_mode="Markdown")
             else:
                 bot.edit_message_text("❌ ទឹកប្រាក់របស់អ្នកមិនគ្រប់គ្រាន់ទេ!", chat_id, call.message.message_id)
-                
             del user_orders[chat_id] 
 
-    # --- ផ្នែកដាក់ប្រាក់ ---
     elif call.data == 'cancel_deposit':
         bot.edit_message_caption(chat_id=chat_id, message_id=call.message.message_id, caption="❌ ប្រតិបត្តិការដាក់ប្រាក់ត្រូវបានបោះបង់!\nDeposit transaction cancelled!")
         if chat_id in pending_deposits: del pending_deposits[chat_id]
@@ -301,9 +294,7 @@ def process_receipt_step(message):
         amount = pending_deposits.get(chat_id, 0.0)
         user_balances[chat_id] = user_balances.get(chat_id, 0.0) + amount
         
-        if chat_id in pending_deposits:
-            del pending_deposits[chat_id]
-            
+        if chat_id in pending_deposits: del pending_deposits[chat_id]
         bot.send_message(chat_id, f"✅ យើងទទួលបានវិក្កយបត្ររបស់អ្នកហើយ! ទឹកប្រាក់ **${amount:.2f}** ត្រូវបានបញ្ចូលទៅក្នុងគណនីរបស់អ្នក។\n\nសូមឆែកមើល '🥷 គណនី' របស់អ្នក។", parse_mode="Markdown")
     else:
         msg = bot.send_message(message.chat.id, "❌ សូមបញ្ជូនជា **រូបភាពវិក្កយបត្រ (Screenshot)** ប៉ុណ្ណោះ។ សូមព្យាយាមផ្ញើម្តងទៀត៖")
